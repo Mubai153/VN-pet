@@ -3,6 +3,8 @@ import ctypes
 import logging
 import multiprocessing
 import queue
+import random
+import time
 import tkinter as tk
 from tkinter import messagebox
 
@@ -16,7 +18,30 @@ from vn_pet.settings_window import SettingsWindow
 
 
 ASSET = os.path.join(os.path.dirname(__file__), "codex_pet_v2.png")
+EGG_ANIMATION_ASSET = os.path.join(os.path.dirname(__file__), "codex_pet_egg_animation.png")
 TRANSPARENT = "#ff00ff"
+RANDOM_EGG_COOLDOWN = 120.0
+CLICK_WINDOW = 1.2
+ANIMATION_SCALE = 1.17
+EGG_ANIMATION_FRAMES = 15
+
+
+def update_click_sequence(count, last_click, now):
+    if now - last_click > CLICK_WINDOW:
+        count = 0
+    count += 1
+    return count, now, count >= 3
+
+
+def split_egg_strip(strip, size):
+    frame_width = strip.width // EGG_ANIMATION_FRAMES
+    if frame_width * EGG_ANIMATION_FRAMES != strip.width:
+        raise ValueError("Egg animation strip must contain 15 equal frames")
+    return [
+        strip.crop((i * frame_width, 0, (i + 1) * frame_width, strip.height))
+        .resize(size, Image.Resampling.NEAREST)
+        for i in range(EGG_ANIMATION_FRAMES)
+    ]
 
 
 class DesktopPet:
@@ -32,22 +57,39 @@ class DesktopPet:
         image = Image.open(ASSET).convert("RGBA")
         image = image.resize((image.width // 2, image.height // 2),
                              Image.Resampling.NEAREST)
-        self.width, self.height = image.size
-        self.split_y = int(self.height * 0.68)
-        head = image.crop((0, 0, self.width, self.split_y))
-        body = image.crop((0, self.split_y, self.width, self.height))
+        self.base_width, self.base_height = image.size
+        self.split_y = int(self.base_height * 0.68)
+        head = image.crop((0, 0, self.base_width, self.split_y))
+        body = image.crop((0, self.split_y, self.base_width, self.base_height))
         self.head_photo = ImageTk.PhotoImage(head)
         self.body_photo = ImageTk.PhotoImage(body)
+        egg_strip = Image.open(EGG_ANIMATION_ASSET).convert("RGBA")
+        animation_size = (round(self.base_width * ANIMATION_SCALE),
+                          round(self.base_height * ANIMATION_SCALE))
+        self.egg_photos = [
+            ImageTk.PhotoImage(frame)
+            for frame in split_egg_strip(egg_strip, animation_size)
+        ]
+        self.width = max(self.base_width, animation_size[0])
+        self.height = max(self.base_height, animation_size[1])
+        self.base_x = (self.width - self.base_width) // 2
 
         self.canvas = tk.Canvas(root, width=self.width, height=self.height,
                                 bg=TRANSPARENT, highlightthickness=0)
         self.canvas.pack()
         self.body_item = self.canvas.create_image(
-            0, self.split_y, anchor="nw", image=self.body_photo)
+            self.base_x, self.split_y, anchor="nw", image=self.body_photo)
         self.head_item = self.canvas.create_image(
-            0, 0, anchor="nw", image=self.head_photo)
+            self.base_x, 0, anchor="nw", image=self.head_photo)
+        self.egg_item = self.canvas.create_image(
+            0, 0, anchor="nw", image=self.egg_photos[0], state="hidden")
 
         self.drag_start = None
+        self.click_start = None
+        self.click_count = 0
+        self.last_click = 0.0
+        self.last_egg_trigger = 0.0
+        self.egg_frame = None
         self.x = 0
         self.y = 0
         self.frame = 0
@@ -71,12 +113,14 @@ class DesktopPet:
         self.settings_window = SettingsWindow(self.server)
         self.server.start()
         self.root.after(50, self.poll_events)
+        self.root.after(random.randint(120000, 300000), self.random_egg)
         self.animate()
 
     def start_drag(self, event):
         self.x = self.root.winfo_x()
         self.y = self.root.winfo_y()
         self.drag_start = (event.x_root - self.x, event.y_root - self.y)
+        self.click_start = (event.x_root, event.y_root)
 
     def drag(self, event):
         if self.drag_start:
@@ -91,15 +135,55 @@ class DesktopPet:
             self.bubble.follow()
 
     def end_drag(self, _event):
+        if self.click_start is not None:
+            moved = max(abs(_event.x_root - self.click_start[0]),
+                        abs(_event.y_root - self.click_start[1]))
+            if moved <= 8:
+                self.click_count, self.last_click, triple = update_click_sequence(
+                    self.click_count, self.last_click, time.monotonic())
+                if triple:
+                    self.click_count = 0
+                    self.trigger_egg("click")
+            else:
+                self.click_count = 0
+        self.click_start = None
         self.drag_start = None
+
+    def trigger_egg(self, source):
+        if self.closing or self.egg_frame is not None:
+            return False
+        now = time.monotonic()
+        if source == "random" and now - self.last_egg_trigger < RANDOM_EGG_COOLDOWN:
+            return False
+        self.last_egg_trigger = now
+        self.egg_frame = 0
+        return True
+
+    def random_egg(self):
+        if not self.closing:
+            self.trigger_egg("random")
+            self.root.after(random.randint(120000, 300000), self.random_egg)
 
     def animate(self):
         if self.closing:
             return
-        # Keep only a small idle head sway; the pet no longer walks automatically.
-        head_shift = (-2, -1, 0, 1, 2, 1, 0, -1)[self.frame % 8]
-        self.canvas.coords(self.head_item, head_shift, 0)
-        self.canvas.coords(self.body_item, 0, self.split_y)
+        if self.egg_frame is not None:
+            self.canvas.itemconfigure(self.head_item, state="hidden")
+            self.canvas.itemconfigure(self.body_item, state="hidden")
+            self.canvas.itemconfigure(self.egg_item,
+                                      image=self.egg_photos[self.egg_frame],
+                                      state="normal")
+            self.egg_frame += 1
+            if self.egg_frame == len(self.egg_photos):
+                self.egg_frame = None
+        else:
+            self.canvas.itemconfigure(self.head_item, state="normal")
+            self.canvas.itemconfigure(self.body_item, state="normal")
+            self.canvas.itemconfigure(self.egg_item, state="hidden")
+            # Keep only a small idle head sway; the pet no longer walks automatically.
+            head_shift = (-2, -1, 0, 1, 2, 1, 0, -1)[self.frame % 8]
+            self.canvas.coords(self.head_item, self.base_x + head_shift, 0)
+            self.canvas.coords(self.body_item, self.base_x, self.split_y)
 
         self.frame += 1
         self.root.after(120, self.animate)
