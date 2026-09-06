@@ -111,9 +111,7 @@ def create_app(companion, token, origin, events):
     async def test_profile(ident: str, body: ProfileEdit):
         p = models.resolve_draft(ident, body.config, body.clear_api_key)
         try:
-            text = await asyncio.wait_for(models.generate(p, "只回复简短中文。", "请回复：连接成功"), 40)
-            if not text:
-                raise ValueError()
+            await asyncio.wait_for(models.test(p), 40)
             return {"ok": True}
         except Exception as exc:
             raise HTTPException(502, safe_error(exc)) from None

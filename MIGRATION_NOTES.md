@@ -11,4 +11,6 @@ VN 外观与原始 Tkinter 窗口来自 [Mubai153/codex-desktop-pet](https://git
 
 新增的配置存储、FastAPI 服务、Tkinter 气泡、窗口进程管理和五页设置容器在 VN 仓库内独立实现。原项目的用户配置、密钥、角色文件、数据库、历史、语音模型和运行状态均未复制。
 
+当前版本另增 `CodexAppServerProvider`：桌宠可通过本机 `codex app-server` 使用 Codex 的认证、模型目录和独立线程。主动陪伴默认使用只读沙箱并禁止审批写入，避免后台陪伴请求改变工作区。
+
 截图文字识别使用支持本机 Python 3.13 的 `rapidocr==3.9.2` 与 ONNX Runtime；原 `rapidocr-onnxruntime==1.4.4` 限制 Python < 3.13，故采用兼容接口适配。

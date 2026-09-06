@@ -2,7 +2,7 @@
 import { CircleHelp } from 'lucide-vue-next';
 defineProps<{helpKey:string}>();
 const help:Record<string,string>={
- 'llm.profile':'新增配置、填写连接信息并保存。选择已配置的实例可将它设为当前模型。',
+ 'llm.profile':'新增配置、填写连接信息并保存。选择实例只会打开配置；需要点击“设为当前模型”才会启用。',
  'llm.context-window':'模型上下文窗口。以实际服务支持的长度为准。',
  'llm.advanced-json':'用于保存模板之外的模型参数，不应在这里填写密钥。'
 };

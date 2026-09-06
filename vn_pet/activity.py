@@ -324,3 +324,4 @@ class Companion:
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+        await self.models.close()

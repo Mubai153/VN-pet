@@ -61,7 +61,7 @@ function openModel(id:string){
  modelBaseline.value=JSON.stringify([config.value,profileName.value,advanced.value,clearKey.value]);
 }
 function modelBody(){let extras:JsonObject;try{extras=JSON.parse(advanced.value);}catch{throw new Error('高级参数必须是有效 JSON。');}if(!extras || Array.isArray(extras) || typeof extras!=='object')throw new Error('高级参数必须是 JSON 对象。');if('api_key' in extras)throw new Error('请在密钥字段中填写 API Key。');return {name:profileName.value,config:{...config.value,...extras},clear_api_key:clearKey.value};}
-async function chooseModel(id:string){if(id===selectedId.value)return;if(modelDirty.value){notify('当前配置有未保存修改，请先保存或还原。',true);return;}await action(async()=>{const p=profiles.value.find(x=>x.id===id);if(p?.configured){applyModels(await api('/settings/llm',{profile_id:id},'PUT'),id);notify('当前模型已切换');}else openModel(id);});}
+function chooseModel(id:string){if(id===selectedId.value)return;if(modelDirty.value){notify('当前配置有未保存修改，请先保存或还原。',true);return;}openModel(id);}
 function createModel(provider:string){return action(async()=>{if(modelDirty.value)throw new Error('请先保存或还原当前配置。');const data=await api('/settings/llm/profiles',{provider});applyModels(data,data.selected_id);notify('配置已创建，请填写并保存。');});}
 function duplicateModel(){return action(async()=>{if(modelDirty.value)throw new Error('请先保存或还原当前配置。');const p=profiles.value.find(x=>x.id===selectedId.value)!;const data=await api('/settings/llm/profiles',{provider:p.provider,duplicate:p.id});applyModels(data,data.selected_id);notify('已复制保存的配置');});}
 function deleteModel(){return action(async()=>{const data=await api(`/settings/llm/profiles/${selectedId.value}`,undefined,'DELETE');applyModels(data);notify('配置已删除');});}

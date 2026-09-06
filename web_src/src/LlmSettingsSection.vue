@@ -236,7 +236,7 @@ function billingModeLabel(mode?: LlmProvider["billing_mode"]) {
       </div>
 
       <details class="advanced-editor"><summary>高级模型参数（JSON）<SettingHelp help-key="llm.advanced-json" /></summary><label>未在表单中展示的模型参数<textarea class="code-textarea" :value="advancedJson" @input="emit('update:advancedJson', ($event.target as HTMLTextAreaElement).value)" /></label></details>
-      <label class="switch-row"><span><strong>清空此配置的 API 密钥（API Key）</strong><small>空值或掩码保留密钥，只有此开关会删除。</small></span><input type="checkbox" :checked="clearApiKey" @change="emit('update:clearApiKey', ($event.target as HTMLInputElement).checked)" /></label>
+      <label v-if="selected.requires_api_key !== false" class="switch-row"><span><strong>清空此配置的 API 密钥（API Key）</strong><small>空值或掩码保留密钥，只有此开关会删除。</small></span><input type="checkbox" :checked="clearApiKey" @change="emit('update:clearApiKey', ($event.target as HTMLInputElement).checked)" /></label>
       <div class="button-row end">
         <button class="pp-button" :disabled="selected.can_fetch_models === false || loadingModels" @click="requestModels"><RefreshCw :class="{ spin: loadingModels }" />拉取可用模型</button>
         <button class="pp-button" @click="emit('test')"><Gauge />测试连接</button>

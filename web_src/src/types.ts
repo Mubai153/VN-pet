@@ -57,6 +57,7 @@ export interface LlmModelEntry {
 
 export interface LlmCatalog {
   entries: LlmModelEntry[];
+  models?: string[];
   cache_state?: "fresh" | "stale" | "recommended";
   refreshing?: boolean;
   error?: string;

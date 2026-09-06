@@ -65,6 +65,11 @@ REASONING_CHAT_FIELDS = CHAT_COMMON_FIELDS[:5] + (
     LLMFieldSpec("reasoning_effort", "推理强度", "select", "high", options=("low", "medium", "high")),
 ) + CHAT_COMMON_FIELDS[5:]
 
+CODEX_FIELDS = (
+    LLMFieldSpec("model", "模型名", "text", "gpt-5.6-terra", required=True),
+    LLMFieldSpec("reasoning_effort", "推理强度", "select", "medium", options=("low", "medium", "high", "xhigh", "max", "ultra")),
+)
+
 
 KIMI_CODEPLAN_FIELDS = (
     LLMFieldSpec("base_url", "URL 地址", "text", "https://api.kimi.com/coding/v1", required=True),
@@ -133,6 +138,21 @@ LLM_PROVIDER_SPECS: dict[str, LLMProviderSpec] = {
         requires_api_key=True,
         supports_vision=True,
         recommended_models=("gpt-5.5", "gpt-5.1", "gpt-4.1"),
+    ),
+    "codex_app_server": LLMProviderSpec(
+        id="codex_app_server",
+        label="Codex 原生连接",
+        transport="app_server",
+        description="通过本机 Codex App Server 使用 Codex 登录态、线程和模型。",
+        fields=CODEX_FIELDS,
+        vendor_id="openai",
+        credential_hint="使用本机 Codex 登录态，无需单独 API Key",
+        usage_notice="桌宠使用独立 Codex 线程和只读沙箱；请先在 Codex CLI 或桌面应用中登录。",
+        default_config={"model": "gpt-5.6-terra", "reasoning_effort": "medium"},
+        requires_api_key=False,
+        supports_vision=True,
+        supports_native_tools=True,
+        recommended_models=("gpt-5.6-terra", "gpt-5.6-sol", "gpt-6-astra"),
     ),
     "openrouter": LLMProviderSpec(
         id="openrouter",

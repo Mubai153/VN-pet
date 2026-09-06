@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from .base import LLMProvider, SystemPromptProvider
+from .codex_app_server_provider import CodexAppServerClient, CodexAppServerProvider
 from .deepseek_provider import DeepSeekProvider
 from .openai_chat_provider import OpenAIChatCompletionsProvider
 from .openai_responses_provider import OpenAIResponsesProvider
@@ -13,6 +14,7 @@ class LLMProviderFactory:
     _providers: dict[str, type[LLMProvider]] = {
         DeepSeekProvider.provider_id: DeepSeekProvider,
         OpenAIResponsesProvider.provider_id: OpenAIResponsesProvider,
+        CodexAppServerProvider.provider_id: CodexAppServerProvider,
         "openai_responses": OpenAIResponsesProvider,
         "openrouter": OpenAIChatCompletionsProvider,
         "claude": OpenAIChatCompletionsProvider,
@@ -49,17 +51,17 @@ class LLMProviderFactory:
         *,
         system_prompt_provider: SystemPromptProvider | None = None,
         logger: Any = None,
+        client: CodexAppServerClient | None = None,
     ) -> LLMProvider:
         provider_cls = cls._providers.get(provider_id)
         if provider_cls is None:
             raise ValueError(f"Unsupported LLM provider: {provider_id}")
         config = dict(config or {})
         config.setdefault("provider_id", provider_id)
-        return provider_cls(
-            config,
-            system_prompt_provider=system_prompt_provider,
-            logger=logger,
-        )
+        kwargs = {"system_prompt_provider": system_prompt_provider, "logger": logger}
+        if provider_id == CodexAppServerProvider.provider_id:
+            kwargs["client"] = client
+        return provider_cls(config, **kwargs)
 
     @classmethod
     def validate_config(cls, provider_id: str, config: dict[str, Any]) -> None:
@@ -75,6 +77,7 @@ class LLMProviderFactory:
             "kimi", "kimi_codeplan", "glm", "glm_codingplan", "mimo",
             "mimo_tokenplan", "doubao", "doubao_codingplan", "minimax",
             "minimax_tokenplan", "custom", "local",
+            "codex_app_server",
         }:
             require_provider_spec(provider_id)
         provider_cls.validate_config(normalized)

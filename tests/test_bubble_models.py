@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import httpx
 import pytest
@@ -77,3 +78,41 @@ async def test_model_catalog_uses_saved_address_and_key(tmp_path, monkeypatch):
     monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: original_client(transport=httpx.MockTransport(respond), **kwargs))
     result = await models.catalog({"provider": "custom", "config": {"base_url": "https://example.invalid/v1", "api_key": "private"}})
     assert result["models"] == ["model-a", "model-b"]
+
+
+@pytest.mark.asyncio
+async def test_local_catalog_reads_lm_studio_downloaded_models(tmp_path, monkeypatch):
+    models = Models(Store(tmp_path))
+    original_client = httpx.AsyncClient
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+    def respond(request):
+        assert str(request.url) == "http://127.0.0.1:1234/api/v1/models"
+        return httpx.Response(200, json={"models": [
+            {"type": "llm", "key": "qwen/qwen3-8b", "display_name": "Qwen3 8B", "max_context_length": 32768},
+            {"type": "embedding", "key": "text-embedding-model"},
+        ]})
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: original_client(transport=httpx.MockTransport(respond), **kwargs))
+    result = await models.catalog({"provider": "local", "config": {"base_url": "http://127.0.0.1:1234/v1"}})
+    assert result["models"] == ["qwen/qwen3-8b"]
+    assert result["entries"][0]["context_length"] == 32768
+
+
+@pytest.mark.asyncio
+async def test_local_catalog_falls_back_to_lm_studio_index(tmp_path, monkeypatch):
+    models = Models(Store(tmp_path))
+    index = tmp_path / ".lmstudio" / ".internal" / "model-index-cache.json"
+    index.parent.mkdir(parents=True)
+    index.write_text('{"models":[{"domain":"llm","indexedModelIdentifier":"local/model.gguf","displayName":"Local Model","contextLength":4096}]}', encoding="utf-8")
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+    class OfflineClient:
+        def __init__(self, **kwargs): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *args): pass
+        async def get(self, *args, **kwargs): raise httpx.ConnectError("offline")
+
+    monkeypatch.setattr(httpx, "AsyncClient", OfflineClient)
+    result = await models.catalog({"provider": "local", "config": {"base_url": "http://127.0.0.1:1234/v1"}})
+    assert result["models"] == ["local/model.gguf"]

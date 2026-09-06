@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import copy
+import json
 import re
 import uuid
+from pathlib import Path
 from urllib.parse import urlsplit
 
 import httpx
 from fastapi import HTTPException
 
 from .providers.factory import LLMProviderFactory
+from .providers.codex_app_server_provider import CodexAppServerClient, CodexAppServerError
 from .providers.registry import LLM_PROVIDER_SPECS, is_vision_supported
 from .secrets import MASK, has_real_model_api_key
 
@@ -21,6 +24,8 @@ def safe_error(exc):
         return "无法连接模型服务，请检查地址、网络和代理。"
     if isinstance(exc, HTTPException):
         return f"模型服务未完成请求（HTTP {exc.status_code}），请检查密钥、模型和额度。"
+    if isinstance(exc, CodexAppServerError):
+        return str(exc)
     return "模型请求失败，请检查模型配置与服务状态。"
 
 
@@ -29,12 +34,14 @@ def public_spec(spec):
             "fields": spec.public_fields(), "description": spec.description,
             "billing_mode": spec.billing_mode, "credential_hint": spec.credential_hint,
             "usage_notice": spec.usage_notice, "recommended_models": list(spec.recommended_models),
-            "can_fetch_models": spec.can_fetch_models, "supports_vision": spec.supports_vision}
+            "can_fetch_models": spec.can_fetch_models, "supports_vision": spec.supports_vision,
+            "requires_api_key": spec.requires_api_key, "supports_native_tools": spec.supports_native_tools}
 
 
 class Models:
     def __init__(self, store):
         self.store = store
+        self.codex_client = CodexAppServerClient(store.directory)
 
     def profile(self, ident):
         value = next((p for p in self.store.snapshot("llm")["profiles"] if p.get("id") == ident), None)
@@ -164,28 +171,104 @@ class Models:
             return False
 
     async def generate(self, p, prompt, text, attachments=None):
-        provider = LLMProviderFactory.create(p["provider"], p["config"], system_prompt_provider=lambda: prompt)
+        provider = self._provider(p, prompt)
         result = await provider.chat_result(text, [], attachments or [])
         # Reasoning lives in a separate result field. Strip embedded reasoning as well.
         reply = re.sub(r"<(think|thinking|reasoning)\b[^>]*>.*?(?:</\1>|$)", "", result.text or "", flags=re.S | re.I).strip()
         return reply
 
+    def _provider(self, p, prompt=""):
+        return LLMProviderFactory.create(
+            p["provider"],
+            p["config"],
+            system_prompt_provider=lambda: prompt,
+            client=self.codex_client if p["provider"] == "codex_app_server" else None,
+        )
+
+    async def test(self, p):
+        provider = self._provider(p, "只回复简短中文。")
+        if hasattr(provider, "check"):
+            await provider.check()
+            return
+        text = await self.generate(p, "只回复简短中文。", "请回复：连接成功")
+        if not text:
+            raise ValueError()
+
     async def catalog(self, p):
+        if p["provider"] == "codex_app_server":
+            return await self._provider(p).catalog()
         spec = LLM_PROVIDER_SPECS[p["provider"]]
         cfg = p["config"]
-        url = str(cfg.get("models_url") or "").strip()
-        if not url:
-            base = str(cfg.get("base_url") or cfg.get("api_url") or "").rstrip("/")
-            base = re.sub(r"/(chat/completions|responses)$", "", base)
-            url = base + "/models"
-        if not url.startswith(("http://", "https://")):
+        explicit_url = str(cfg.get("models_url") or "").strip()
+        base = str(cfg.get("base_url") or cfg.get("api_url") or "").rstrip("/")
+        base = re.sub(r"/(chat/completions|responses)$", "", base)
+        if explicit_url:
+            urls = [explicit_url]
+        elif spec.id == "local":
+            # LM Studio's native catalog includes downloaded (not only loaded) models.
+            root = re.sub(r"/(?:api/)?v1$", "", base)
+            urls = [root + "/api/v1/models", root + "/v1/models"]
+        else:
+            urls = [base + "/models"]
+        if not all(url.startswith(("http://", "https://")) for url in urls):
             raise HTTPException(422, "请先填写模型服务地址")
-        headers = {"Authorization": f"Bearer {cfg['api_key']}"} if has_real_model_api_key(cfg.get("api_key")) else {}
+        headers = {"Authorization": f"Bearer {cfg.get('api_key', '')}"} if has_real_model_api_key(cfg.get("api_key")) else {}
+        local_entries = []
+        host = (urlsplit(base).hostname or "").lower()
+        if spec.id == "local" and host in {"localhost", "127.0.0.1", "::1"}:
+            try:
+                index = json.loads((Path.home() / ".lmstudio" / ".internal" / "model-index-cache.json").read_text(encoding="utf-8"))
+                for row in index.get("models", []):
+                    if not isinstance(row, dict) or row.get("domain") != "llm":
+                        continue
+                    model_id = str(row.get("indexedModelIdentifier") or row.get("defaultIdentifier") or "").strip()
+                    if not model_id:
+                        continue
+                    entry = {"id": model_id, "name": row.get("displayName") or model_id, "source": "configured"}
+                    if row.get("contextLength"):
+                        entry["context_length"] = row["contextLength"]
+                        entry["max_context_length"] = row["contextLength"]
+                        entry["context_source"] = "detected"
+                    local_entries.append(entry)
+            except (OSError, ValueError):
+                pass
         async with httpx.AsyncClient(timeout=20) as client:
-            response = await client.get(url, headers=headers)
-            response.raise_for_status()
-            data = response.json()
-        rows = data.get("data", data.get("models", []))
-        ids = [str(row.get("id") or row.get("name") or "") for row in rows if isinstance(row, dict)]
-        return {"entries": [{"id": m, "name": m, "source": "live"} for m in ids if m],
-                "cache_state": "fresh"}
+            last_error = None
+            for url in urls:
+                try:
+                    response = await client.get(url, headers=headers)
+                    response.raise_for_status()
+                    data = response.json()
+                    rows = data.get("data", data.get("models", [])) if isinstance(data, dict) else []
+                    entries = []
+                    seen = set()
+                    for row in rows:
+                        if not isinstance(row, dict) or row.get("type") == "embedding":
+                            continue
+                        model_id = str(row.get("id") or row.get("key") or row.get("name") or "").strip()
+                        if not model_id or model_id in seen:
+                            continue
+                        seen.add(model_id)
+                        entry = {"id": model_id, "name": row.get("display_name") or model_id, "source": "live"}
+                        if row.get("owned_by") or row.get("publisher"):
+                            entry["owned_by"] = row.get("owned_by") or row.get("publisher")
+                        if row.get("max_context_length"):
+                            entry["max_context_length"] = row["max_context_length"]
+                            entry["context_length"] = row["max_context_length"]
+                            entry["context_source"] = "detected"
+                        entries.append(entry)
+                    seen = {entry["id"] for entry in entries}
+                    merged = entries + [item for item in local_entries if item["id"] not in seen]
+                    ids = [entry["id"] for entry in merged]
+                    return {"entries": merged, "models": ids, "cache_state": "fresh"}
+                except (httpx.HTTPError, ValueError) as exc:
+                    last_error = exc
+            if last_error:
+                if local_entries:
+                    ids = [entry["id"] for entry in local_entries]
+                    return {"entries": local_entries, "models": ids, "cache_state": "fresh"}
+                raise last_error
+        return {"entries": [], "models": [], "cache_state": "fresh"}
+
+    async def close(self):
+        await self.codex_client.close()
