@@ -79,12 +79,14 @@ async function close(){
  try{
   const pending=Promise.all([activityQueue.flush(),petQueue.flush()]);
   await Promise.race([pending,new Promise((_,reject)=>setTimeout(()=>reject(new Error('保存超时，请稍后重试。')),3000))]);
-  if(modelDirty.value || characterDirty.value){closing.value=false;notify('模型或角色有未保存修改，请先保存或还原。',true);return;}
+  if(modelDirty.value || characterDirty.value){closing.value=false;notify('模型或角色有未保存修改，请先保存或还原。',true);return false;}
   if(!window.pywebview?.api.close)throw new Error('设置窗口连接已失效，请重新打开。');
   await window.pywebview.api.close();
+  return true;
  }catch(e){
   closing.value=false;
   notify(e instanceof Error?e.message:'关闭前保存失败，请重试。',true);
+  return false;
  }
 }
 let poll:ReturnType<typeof setInterval>|undefined;

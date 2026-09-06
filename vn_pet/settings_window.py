@@ -9,6 +9,7 @@ def run(origin, token, connection):
     import webview
     allow_close = threading.Event()
     close_requested = threading.Event()
+    close_in_progress = threading.Event()
 
     class Bridge:
         def bootstrap(self):
@@ -25,16 +26,33 @@ def run(origin, token, connection):
     window = webview.create_window("VN 桌宠 · 设置", origin, js_api=Bridge(), width=1160, height=820,
                                    min_size=(800, 580), background_color="#f6f3ed", text_select=True)
 
+    def request_close_from_browser():
+        def finished(result):
+            if result is True:
+                return
+            if result == "__missing__":
+                close_requested.set()
+                return
+            close_in_progress.clear()
+
+        try:
+            window.evaluate_js(
+                "window.requestSettingsClose ? window.requestSettingsClose() : '__missing__'",
+                callback=finished,
+            )
+        except Exception:
+            close_in_progress.clear()
+            close_requested.set()
+
     def closing():
         if allow_close.is_set():
             return True
         if close_requested.is_set():
             return False
-        try:
-            handled = window.evaluate_js("Boolean(window.requestSettingsClose && (window.requestSettingsClose(), true))")
-            return not handled
-        except Exception:
-            return True
+        if not close_in_progress.is_set():
+            close_in_progress.set()
+            threading.Thread(target=request_close_from_browser, daemon=True).start()
+        return False
     window.events.closing += closing
 
     def control():
