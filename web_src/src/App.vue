@@ -11,8 +11,8 @@ const page=ref(localStorage.getItem('vn.settings.page') || 'llm');
 if(!sections.some(s=>s.id===page.value))page.value='llm';
 const ready=ref(false),fatal=ref(''),notice=ref(''),noticeError=ref(false),busy=ref(false),saveStatus=ref('所有设置已保存');
 const profiles=ref<LlmProfile[]>([]),providers=ref<LlmProvider[]>([]),selectedId=ref(''),activeId=ref('');
-const config=ref<JsonObject>({}),profileName=ref(''),advanced=ref('{}'),clearKey=ref(false),context=ref<JsonObject>({});
-const catalog=ref<LlmCatalog>({entries:[],models:[],cache_state:'recommended'}),loadingModels=ref(false);
+const config=ref<JsonObject>({}),profileName=ref(''),advanced=ref('{}'),clearKey=ref(false);
+const catalog=ref<LlmCatalog>({entries:[],cache_state:'recommended'}),loadingModels=ref(false);
 const connectionStates=ref<Record<string,'idle'|'testing'|'connected'|'failed'>>({});
 const modelBaseline=ref('');
 const character=ref<Character>({name:'VN',identity:'',personality:'',speaking_style:'',example_dialogues:'',system_prompt:''});
@@ -21,6 +21,7 @@ const activity=ref<ActivitySettings>({enabled:false,interaction_mode:'fixed_inte
 const pet=ref<PetSettings>({enabled:true,font_size:14,position:'auto',duration_seconds:10,background:'#fff8ed',border:'#b99666',text_color:'#40382d'});
 const status=ref<JsonObject>({state:'idle',warnings:[]});
 const previewText=ref('忙了一会儿，也记得让眼睛歇一歇。我在这里陪着你。');
+const closing=ref(false);
 const characterFields:[keyof Character,string][]=[['name','名称'],['identity','身份'],['personality','性格'],['speaking_style','说话风格'],['example_dialogues','示例对话'],['system_prompt','补充系统提示']];
 const sourceOptions:[keyof ContextSources,string,string][]=[
  ['foreground_window','当前窗口','读取前台窗口标题与进程名。'],['browser_windows','浏览器标题','读取可见浏览器窗口的标题。'],['idle_time','空闲时长','判断多久没有操作电脑。'],
@@ -40,11 +41,11 @@ async function action(work:()=>Promise<void>){if(busy.value)return;busy.value=tr
 let activityRevision=0,petRevision=0;
 let savedActivity:ActivitySettings,savedPet:PetSettings;
 const activityQueue=createSaveQueue<{value:ActivitySettings;revision:number}>(async({value,revision})=>{
- try{const r=await api('/activity/settings',value,'PUT');savedActivity=r.settings;if(revision===activityRevision){activity.value=r.settings;saveStatus.value='所有设置已保存';}}
+ try{const r=await api('/activity/settings',value,'PUT',5000);savedActivity=r.settings;if(revision===activityRevision){activity.value=r.settings;saveStatus.value='所有设置已保存';}}
  catch(e){if(revision===activityRevision)activity.value=clone(savedActivity);throw e;}
 },e=>{saveStatus.value='保存失败，已恢复上次设置';notify(String(e instanceof Error?e.message:e),true);});
 const petQueue=createSaveQueue<{value:PetSettings;revision:number}>(async({value,revision})=>{
- try{const r=await api('/settings/pet',value,'PUT');savedPet=r.settings;if(revision===petRevision){pet.value=r.settings;saveStatus.value='所有设置已保存';}}
+ try{const r=await api('/settings/pet',value,'PUT',5000);savedPet=r.settings;if(revision===petRevision){pet.value=r.settings;saveStatus.value='所有设置已保存';}}
  catch(e){if(revision===petRevision)pet.value=clone(savedPet);throw e;}
 },e=>{saveStatus.value='保存失败，已恢复上次设置';notify(String(e instanceof Error?e.message:e),true);});
 function scheduleActivity(){saveStatus.value='正在保存…';activityQueue.schedule({value:clone(activity.value),revision:++activityRevision});}
@@ -56,7 +57,7 @@ function openModel(id:string){
  selectedId.value=id;const p=profiles.value.find(x=>x.id===id);config.value=clone(p?.config || {});config.value.api_key='';profileName.value=p?.name || '';clearKey.value=false;
  const known=new Set([...(p?.fields || []).map(f=>f.key),'api_key','provider_id','context_length']);
  advanced.value=JSON.stringify(Object.fromEntries(Object.entries(config.value).filter(([key])=>!known.has(key))),null,2);
- catalog.value={entries:(p?.recommended_models || []).map(id=>({id,source:'recommended',recommended:true})),models:p?.recommended_models || [],cache_state:'recommended'};
+ catalog.value={entries:(p?.recommended_models || []).map(id=>({id,source:'recommended',recommended:true})),cache_state:'recommended'};
  modelBaseline.value=JSON.stringify([config.value,profileName.value,advanced.value,clearKey.value]);
 }
 function modelBody(){let extras:JsonObject;try{extras=JSON.parse(advanced.value);}catch{throw new Error('高级参数必须是有效 JSON。');}if(!extras || Array.isArray(extras) || typeof extras!=='object')throw new Error('高级参数必须是 JSON 对象。');if('api_key' in extras)throw new Error('请在密钥字段中填写 API Key。');return {name:profileName.value,config:{...config.value,...extras},clear_api_key:clearKey.value};}
@@ -72,7 +73,20 @@ function saveCharacter(){return action(async()=>{const sent=JSON.stringify(chara
 function trigger(){return action(async()=>{await activityQueue.flush();const r=await api('/activity/proactive',{manual:true});notify(r.accepted?'已触发，稍后会在桌宠旁显示气泡。':'已有陪伴请求正在进行，请稍候。');await refreshStatus();});}
 function preview(){return action(async()=>{await api('/pet/preview',{settings:pet.value,text:previewText.value});notify('预览气泡已显示在桌宠旁');});}
 async function refreshStatus(){try{status.value=await api('/activity/status');}catch(e){status.value={...status.value,error:'无法连接桌宠服务，请重新打开设置。'};}}
-async function close(){await action(async()=>{await Promise.all([activityQueue.flush(),petQueue.flush()]);if(modelDirty.value || characterDirty.value){notify('模型或角色有未保存修改，请先保存或还原。',true);return;}await window.pywebview?.api.close();});}
+async function close(){
+ if(closing.value)return;
+ closing.value=true;
+ try{
+  const pending=Promise.all([activityQueue.flush(),petQueue.flush()]);
+  await Promise.race([pending,new Promise((_,reject)=>setTimeout(()=>reject(new Error('保存超时，请稍后重试。')),3000))]);
+  if(modelDirty.value || characterDirty.value){closing.value=false;notify('模型或角色有未保存修改，请先保存或还原。',true);return;}
+  if(!window.pywebview?.api.close)throw new Error('设置窗口连接已失效，请重新打开。');
+  await window.pywebview.api.close();
+ }catch(e){
+  closing.value=false;
+  notify(e instanceof Error?e.message:'关闭前保存失败，请重试。',true);
+ }
+}
 let poll:ReturnType<typeof setInterval>|undefined;
 window.requestSettingsClose=()=>{void close();};
 onMounted(async()=>{try{await bootstrap();const [m,c,a,p]=await Promise.all([api('/settings/llm'),api('/settings/character'),api('/activity/settings'),api('/settings/pet')]);applyModels(m);character.value=c.settings;characterBaseline.value=JSON.stringify(character.value);activity.value=a.settings;savedActivity=clone(activity.value);pet.value=p.settings;savedPet=clone(pet.value);ready.value=true;await refreshStatus();poll=setInterval(()=>void refreshStatus(),2500);}catch(e){fatal.value=e instanceof Error?e.message:'无法加载设置';}});
@@ -88,14 +102,14 @@ onBeforeUnmount(()=>{clearInterval(poll);activityQueue.cancel();petQueue.cancel(
    <div class="sidebar-foot"><PawPrint/><p>一点小小的陪伴<br><span>从属于你的设置开始。</span></p></div>
   </aside>
   <div class="workspace-body">
-   <header class="workspace-top"><span>桌面伙伴 <span class="breadcrumb">/</span> {{ sections.find(s=>s.id===page)?.label }}</span><div><small :class="{'save-error':saveStatus.includes('失败')}"><Check/>{{ saveLabel }}</small><button class="icon-button" aria-label="关闭设置" @click="close"><X/></button></div></header>
+   <header class="workspace-top"><span>桌面伙伴 <span class="breadcrumb">/</span> {{ sections.find(s=>s.id===page)?.label }}</span><div><small :class="{'save-error':saveStatus.includes('失败')}"><Check/>{{ saveLabel }}</small><button class="icon-button" aria-label="关闭设置" :disabled="closing" @click="close"><X/></button></div></header>
    <main>
     <div v-if="fatal" class="fatal" role="alert"><h2>暂时无法打开设置</h2><p>{{ fatal }}</p><button class="pp-button" @click="reload">重新加载</button></div>
     <div v-else-if="!ready" class="loading"><RefreshCw class="spin"/>正在连接桌宠…</div>
     <template v-else>
      <div v-if="status.storage_warning" class="inline-warning">{{ status.storage_warning }}</div>
      <fieldset v-if="page==='llm'" class="reset-fieldset" :disabled="busy">
-      <LlmSettingsSection :profiles="profiles" :providers="providers" :selected-id="selectedId" :catalog="catalog" :advanced-json="advanced" :clear-api-key="clearKey" :dirty="modelDirty" :loading-models="loadingModels" :connection-states="connectionStates" v-model:config="config" v-model:context="context" v-model:profile-name="profileName" @select="chooseModel" @create="createModel" @duplicate="duplicateModel" @remove="deleteModel" @fetch-models="fetchModels" @test="testModel" @save="saveModel" @revert="openModel(selectedId)" @update:advanced-json="advanced=$event" @update:clear-api-key="clearKey=$event"/>
+      <LlmSettingsSection :profiles="profiles" :providers="providers" :selected-id="selectedId" :catalog="catalog" :advanced-json="advanced" :clear-api-key="clearKey" :dirty="modelDirty" :loading-models="loadingModels" :connection-states="connectionStates" v-model:config="config" v-model:profile-name="profileName" @select="chooseModel" @create="createModel" @duplicate="duplicateModel" @remove="deleteModel" @fetch-models="fetchModels" @test="testModel" @save="saveModel" @revert="openModel(selectedId)" @update:advanced-json="advanced=$event" @update:clear-api-key="clearKey=$event"/>
       <div v-if="selectedId" class="button-row end"><span class="muted">{{ selectedId===activeId?'此配置正在用于 VN 主动陪伴':'保存后可将此配置设为当前模型' }}</span><button class="pp-button primary" :disabled="selectedId===activeId || modelDirty" @click="activateModel">设为当前模型</button></div>
      </fieldset>
      <template v-if="page==='character'">

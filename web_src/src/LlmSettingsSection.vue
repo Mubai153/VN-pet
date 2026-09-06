@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Copy, Gauge, LoaderCircle, Plus, RefreshCw, RotateCcw, Save, Search, Trash2 } from "lucide-vue-next";
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import type { JsonObject, LlmCatalog, LlmModelEntry, LlmProfile, LlmProvider } from "./types";
 import SettingHelp from "./SettingHelp.vue";
 
@@ -16,11 +16,10 @@ const props = defineProps<{
   connectionStates?: Record<string, "idle" | "testing" | "connected" | "failed">;
 }>();
 const config = defineModel<JsonObject>("config", { required: true });
-const context = defineModel<JsonObject>("context", { required: true });
 const profileName = defineModel<string>("profileName", { required: true });
 const emit = defineEmits<{
   select: [id: string]; create: [provider: string]; duplicate: []; remove: [];
-  fetchModels: []; test: []; save: []; revert: []; saveContext: [];
+  fetchModels: []; test: []; save: []; revert: [];
   "update:advancedJson": [value: string]; "update:clearApiKey": [value: boolean];
 }>();
 
@@ -133,7 +132,7 @@ function modelKeydown(event: KeyboardEvent) {
   else if (event.key === "Enter" && modelOpen.value && filteredModels.value[activeModelIndex.value]) { event.preventDefault(); chooseModel(filteredModels.value[activeModelIndex.value]); }
   else if (event.key === "Escape") modelOpen.value = false;
 }
-function openModels() { modelFilter.value = ""; modelOpen.value = true; activeModelIndex.value = 0; void nextTick(); }
+function openModels() { modelFilter.value = ""; modelOpen.value = true; activeModelIndex.value = 0; }
 function requestModels() { openModels(); emit("fetchModels"); }
 function filterModels() { modelFilter.value = String(config.value.model || ""); modelOpen.value = true; activeModelIndex.value = 0; }
 function closeModelsOnBlur(event: FocusEvent) {

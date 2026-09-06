@@ -57,17 +57,9 @@ export interface LlmModelEntry {
 
 export interface LlmCatalog {
   entries: LlmModelEntry[];
-  models: string[];
   cache_state?: "fresh" | "stale" | "recommended";
   refreshing?: boolean;
   error?: string;
   fetched_at?: number | null;
   current_model?: LlmModelEntry | null;
-}
-
-export interface LlmResponse {
-  settings?: JsonObject;
-  active_profile?: LlmProfile;
-  providers?: LlmProvider[];
-  profiles?: LlmProfile[];
 }

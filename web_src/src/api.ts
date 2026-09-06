@@ -11,8 +11,8 @@ export async function bootstrap(){
   token=(await window.pywebview!.api.bootstrap()).token || '';
   if(!token)throw new Error('设置窗口会话无效，请重新打开。');
 }
-export async function api<T=any>(path:string,body?:unknown,method?:string):Promise<T>{
-  const response=await fetch(path,{method:method || (body===undefined?'GET':'POST'),headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(50000)});
+export async function api<T=any>(path:string,body?:unknown,method?:string,timeoutMs=50000):Promise<T>{
+  const response=await fetch(path,{method:method || (body===undefined?'GET':'POST'),headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(timeoutMs)});
   const data=await response.json();
   if(!response.ok)throw new Error(typeof data.detail==='string'?data.detail:'请求失败，请检查配置。');
   return data as T;

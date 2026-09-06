@@ -6,7 +6,6 @@ import pytest
 
 from vn_pet.activity import Companion
 from vn_pet.activity_manager import should_activity_manager_speak
-from vn_pet.providers.base import EmptyModelResponse
 from vn_pet.settings import ActivitySettings, Store
 
 

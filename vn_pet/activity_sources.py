@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import ctypes
 import sys
-import time
 from typing import Any
 
 BROWSER_PROCESS_NAMES = {

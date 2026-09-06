@@ -8,6 +8,7 @@ import threading
 def run(origin, token, connection):
     import webview
     allow_close = threading.Event()
+    close_requested = threading.Event()
 
     class Bridge:
         def bootstrap(self):
@@ -16,8 +17,10 @@ def run(origin, token, connection):
             return {"token": token}
 
         def close(self):
-            allow_close.set()
-            window.destroy()
+            # Do not destroy WebView2 from inside a JS bridge callback. The
+            # callback can be reached from the native closing event, which
+            # would re-enter that event and occasionally crash the window.
+            close_requested.set()
 
     window = webview.create_window("VN 桌宠 · 设置", origin, js_api=Bridge(), width=1160, height=820,
                                    min_size=(800, 580), background_color="#f6f3ed", text_select=True)
@@ -25,6 +28,8 @@ def run(origin, token, connection):
     def closing():
         if allow_close.is_set():
             return True
+        if close_requested.is_set():
+            return False
         try:
             handled = window.evaluate_js("Boolean(window.requestSettingsClose && (window.requestSettingsClose(), true))")
             return not handled
@@ -34,13 +39,12 @@ def run(origin, token, connection):
 
     def control():
         try:
-            while True:
-                if connection.poll(1):
+            while not close_requested.is_set():
+                if connection.poll(0.1):
                     action = connection.recv()
                     if action == "close":
-                        allow_close.set()
-                        window.destroy()
-                        return
+                        close_requested.set()
+                        break
                     if action == "focus":
                         window.restore()
                         window.show()
@@ -48,12 +52,16 @@ def run(origin, token, connection):
                         window.on_top = False
                 parent = multiprocessing.parent_process()
                 if parent and not parent.is_alive():
-                    allow_close.set()
-                    window.destroy()
-                    return
+                    close_requested.set()
+                    break
         except (EOFError, OSError):
-            allow_close.set()
+            close_requested.set()
+
+        allow_close.set()
+        try:
             window.destroy()
+        except Exception:
+            pass
 
     webview.start(control, gui="edgechromium", private_mode=True)
 

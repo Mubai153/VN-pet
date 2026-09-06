@@ -188,4 +188,4 @@ class Models:
         rows = data.get("data", data.get("models", []))
         ids = [str(row.get("id") or row.get("name") or "") for row in rows if isinstance(row, dict)]
         return {"entries": [{"id": m, "name": m, "source": "live"} for m in ids if m],
-                "models": [m for m in ids if m], "cache_state": "fresh"}
+                "cache_state": "fresh"}
