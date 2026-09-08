@@ -1,0 +1,2 @@
+# Preserve exact approved manifest bytes across Git line-ending settings.
+packages/**/pet.json -text whitespace=cr-at-eol
