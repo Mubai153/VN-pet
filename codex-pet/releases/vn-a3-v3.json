@@ -1,0 +1,39 @@
+{
+  "package_id": "vn-a3-v3",
+  "design_version": "a3-v3",
+  "sprite_version_number": 2,
+  "approved_on": "2026-09-08",
+  "approval_scope": "9 standard animations, 16 look directions; separate package, preserve old package",
+  "display_name_status": "provisional",
+  "installed": false,
+  "package_files": {
+    "pet.json": "2e4e7ebb7c9873970e1f0efb2b86e3bfdc866d543c88090f7848c8810579509d",
+    "spritesheet.webp": "07d0476b962facaf882c8edf3ddc9dfa12aa1d68f3c7d77f8992575ac883ef44"
+  },
+  "design_master": {
+    "path": "design/vn-a3-v3/master.png",
+    "sha256": "3771f171a1e5115057c2f3b3c4e8368c0ddb1405d58b1b825c2089a254398bff"
+  },
+  "atlas": {
+    "width": 1536,
+    "height": 2288,
+    "cell_width": 192,
+    "cell_height": 208,
+    "columns": 8,
+    "rows": 11,
+    "standard_frames": 57,
+    "look_frames": 16,
+    "neutral_cells": 1
+  },
+  "accepted_details": [
+    "空闲呼吸较轻；左跑部分帧较近、摆臂偏弱，右跑后段略矮。",
+    "查看结果的点头及受阻的弯身较明显。",
+    "22.5° 与 45° 较接近，157.5° 向右分量和 247.5° 向下分量较轻；有序复核未见方向反转。"
+  ],
+  "provenance": {
+    "previous_package_id": "vn-a3",
+    "selected_master": "D21: calibrated eyes before outward pupil experiment",
+    "animation_approval": "D24",
+    "original_evidence": "Local production archive; original approval and QA JSON retained unchanged."
+  }
+}
