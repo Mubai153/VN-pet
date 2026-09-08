@@ -34,10 +34,12 @@ codex-pet/
 
 Git 保留成品及继续开发需要的稳定依据；过程材料统一进入 `.work/`。只有本目录的 `.gitignore` 排除 `.work/`，不修改上游的忽略规则。新克隆没有 `.work/` 仍可使用、预览和核验成品；需要原始制作材料时从本地归档或备份恢复。原型和历史记录不会自动成为后续版本的设计依据。
 
-从仓库根目录运行成品检查：
+从仓库根目录创建一次独立的可选校验环境并运行成品检查：
 
 ```powershell
-.\.venv\Scripts\python.exe codex-pet/tools/verify_package.py
+py -3.13 -m venv codex-pet/.venv
+.\codex-pet\.venv\Scripts\python.exe -m pip install -r codex-pet/requirements-dev.txt
+.\codex-pet\.venv\Scripts\python.exe codex-pet/tools/verify_package.py
 ```
 
-Python 环境与依赖安装见[仓库 README](../README.md)。检查只依赖 Python 与 Pillow；它验证素材结构及已批准哈希，不替代动作观感验收。
+校验只依赖 Python 与 Pillow，不需要安装 Windows 桌宠依赖、Node、WebView2 或启动桌宠。它验证素材结构及已批准哈希，不替代动作观感验收。

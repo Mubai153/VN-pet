@@ -30,11 +30,11 @@
 
 ## 检查命令
 
-在仓库根目录执行；默认检查全部已登记成品，也可指定一个包：
+从仓库根目录执行；使用 Codex Pet 的独立校验环境，默认检查全部已登记成品，也可指定一个包：
 
 ```powershell
-.\.venv\Scripts\python.exe codex-pet/tools/verify_package.py
-.\.venv\Scripts\python.exe codex-pet/tools/verify_package.py vn-a3-v3
+.\codex-pet\.venv\Scripts\python.exe codex-pet/tools/verify_package.py
+.\codex-pet\.venv\Scripts\python.exe codex-pet/tools/verify_package.py vn-a3-v3
 ```
 
 检查包括发布记录与包对应关系、配置和主形象哈希、图集尺寸与透明度、有效及空白槽位、包内链接和预览图集引用。它不启动浏览器，也不代替视觉判断。

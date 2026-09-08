@@ -95,9 +95,10 @@ def verify_package(root: Path, package_id: str) -> None:
                 expected = column < count or (row == 0 and column == 6)
                 require((cell.getbbox() is not None) == expected,
                         f"Unexpected occupied/empty cell: row={row}, column={column}")
-        hidden_rgb = atlas.convert("RGB")
-        hidden_rgb.paste((0, 0, 0), (0, 0, *atlas.size), alpha.point(lambda value: 255 if value else 0))
-        require(hidden_rgb.getbbox() is None, "RGB residue in fully transparent pixels")
+        transparent_mask = alpha.point(lambda value: 255 if value == 0 else 0)
+        transparent_rgb = Image.new("RGB", atlas.size)
+        transparent_rgb.paste(atlas.convert("RGB"), (0, 0), transparent_mask)
+        require(transparent_rgb.getbbox() is None, "RGB residue in fully transparent pixels")
     verify_links(package)
 
 

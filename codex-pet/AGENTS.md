@@ -1,6 +1,6 @@
 # Codex Pet 开发规则
 
-本文件适用于 `codex-pet/`。继承根目录的沟通、uv 使用、代码风格和提交约定；此目录维护 Codex 角色素材，Windows 桌宠的 `vn_pet/`、前端及启动目录保持原结构。
+本文件适用于 `codex-pet/`。继承根目录的沟通、代码风格和提交约定；此目录维护 Codex 角色素材，Windows 桌宠的 `vn_pet/`、前端及启动目录保持原结构。Codex Pet 不导入 Windows 桌宠代码。
 
 ## 工作入口
 
@@ -21,7 +21,7 @@
 修改成品、设计主形象或发布记录后，从仓库根目录执行：
 
 ```powershell
-.\.venv\Scripts\python.exe codex-pet/tools/verify_package.py
+.\codex-pet\.venv\Scripts\python.exe codex-pet/tools/verify_package.py
 ```
 
 修改预览后直接打开包内 `preview.html`，查看资源加载及受影响的动作或注视表现。仅改文档时核对引用与状态即可；素材和文档整理不要求建立测试套件，Windows 应用测试只在其代码或行为受影响时运行。
