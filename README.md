@@ -43,14 +43,52 @@ Windows 像素桌宠，支持摇头动画、拖动、文字气泡、主动陪伴
 
 ## 开发与重新安装
 
-Windows 10/11，Python 3.13（需 Tkinter）、Edge WebView2 Runtime。当前安装已使用项目独立环境 `.venv`，包括 OCR 依赖；无需启动原 Lin-pian-pian 项目。
+Windows 10/11，Python 3.13（需 Tkinter）、Edge WebView2 Runtime。以下两种方式任选一种，均在仓库根目录创建 `.venv`，依赖统一维护在 `requirements*.txt`；无需启动原 Lin-pian-pian 项目。
+
+### 方式一：Python venv + pip
+
+先安装包含 Tkinter 的 Python 3.13，在 PowerShell 中执行：
 
 ```powershell
-python -m venv .venv
+py -3.13 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-# 可选 OCR：Python 3.13 使用新的 rapidocr 包
+# 可选 OCR
 .\.venv\Scripts\python.exe -m pip install -r requirements-ocr.txt
+# 开发时安装，已包含运行依赖
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 ```
+
+### 方式二：uv
+
+如果尚未安装 uv，执行[官方安装命令](https://docs.astral.sh/uv/getting-started/installation/)，完成后重新打开终端：
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+uv --version
+```
+
+`.python-version` 指定 Python 3.13，uv 会在缺少该版本时自动下载：
+
+```powershell
+uv venv
+uv pip install --python .venv -r requirements.txt
+# 可选 OCR
+uv pip install --python .venv -r requirements-ocr.txt
+# 开发时安装，已包含运行依赖
+uv pip install --python .venv -r requirements-dev.txt
+```
+
+uv 使用 pip 接口读取 requirements，尚未采用 `pyproject.toml` 和 `uv.lock`，因此不使用 `uv sync`；依赖仍按 requirements 中的版本约束解析。
+
+### 启动与检查
+
+已有 Python 3.13 的 `.venv` 时，跳过创建步骤，按所选方式安装依赖即可。两种方式都明确使用项目环境，无需激活；启动命令相同：
+
+```powershell
+.\.venv\Scripts\python.exe codex_desktop_pet.py
+```
+
+也可双击 `启动Codex桌宠.bat`，它会优先使用项目虚拟环境。
 
 OCR 小模型随当前 RapidOCR wheel 提供；不会安装 PyTorch 或语音模型。RapidOCR 的安装及输出接口见[官方快速开始](https://rapidai.github.io/RapidOCRDocs/main/quickstart/)。
 
@@ -65,10 +103,9 @@ npm run build
 npm run test:e2e
 ```
 
-Python 与 Windows 实机检查：
+按上述任一方式安装 `requirements-dev.txt` 后，在仓库根目录执行 Python 与 Windows 实机检查：
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 .\.venv\Scripts\python.exe -m pytest tests -q
 .\.venv\Scripts\python.exe -m tests.native_smoke
 ```
