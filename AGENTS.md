@@ -12,6 +12,8 @@ Windows 桌宠的 `codex_desktop_pet.py` 管理 Tkinter 主线程。`vn_pet/` �
 
 ## 构建、测试与本地开发
 
+根目录的环境和命令只服务于 Windows 桌宠；Codex Pet 的可选校验依赖和环境只放在 `codex-pet/`。
+
 Agent 日常使用 uv 管理项目 `.venv`，安装与环境创建步骤见 `README.md`。更新开发依赖使用 `uv pip install --python .venv -r requirements-dev.txt`，运行与测试使用 `.\.venv\Scripts\python.exe`。依赖维护在 `requirements*.txt`，使用 uv 的 pip 接口，无需激活环境。
 
 Windows 桌宠的前端命令在 `web_src/` 中执行：

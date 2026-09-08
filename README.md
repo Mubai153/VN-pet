@@ -7,7 +7,13 @@
 | **VN Windows 桌宠** | 独立运行的 Windows 程序，支持拖动、文字气泡、主动陪伴和 Vue 设置窗口。 | 下文的启动说明；`codex_desktop_pet.py`、`vn_pet/`、`web_src/` 等现有目录。 |
 | **VN Codex Pet** | 安装到 Codex 的角色素材，由 Codex 播放任务动作和注视方向。 | [Codex Pet 项目入口](codex-pet/README.md)；[A3 v3 成品与安装说明](codex-pet/packages/vn-a3-v3/README.md)。 |
 
-`vn_pet/` 是 Windows 程序的 Python 模块；`codex-pet/` 集中维护 Codex 素材包、设计、决策和本地制作工作区。后者的离线预览无需启动 Windows 桌宠。以下安装与运行步骤用于 Windows 桌宠开发环境；Codex 素材制作工具也可使用同一个 Python 环境。
+两套产品的边界固定如下：
+
+- Windows 桌宠只使用根目录的 `codex_desktop_pet.py`、`vn_pet/`、`web_src/`、`static/` 和根目录资源；它不读取 `codex-pet/`。
+- Codex Pet 只使用 `codex-pet/` 内的配置、图集、预览、校验工具和开发文档；它不导入 `vn_pet/`，也不参与 Windows 桌宠启动。
+- 修改或验证其中一套时，不需要重建、安装或启动另一套。Codex Pet 的预览本身是离线 HTML；校验工具仅是可选的开发检查。
+
+因此，下面的安装与运行步骤只针对 Windows 桌宠。Codex Pet 的安装、预览和独立校验见 [Codex Pet 入口](codex-pet/README.md)。
 
 ## Windows 桌宠：启动与首次使用
 
@@ -48,9 +54,9 @@
 
 设置服务仅监听随机的本机回环端口，并校验地址、来源和会话令牌。正常使用应从桌宠右键打开设置；直接在普通浏览器访问该地址不会获得设置会话。
 
-## 开发与重新安装
+## Windows 桌宠：开发与重新安装
 
-Windows 10/11，Python 3.13（需 Tkinter）、Edge WebView2 Runtime。以下两种方式任选一种，均在仓库根目录创建 `.venv`，依赖统一维护在 `requirements*.txt`；无需启动原 Lin-pian-pian 项目。
+Windows 10/11，Python 3.13（需 Tkinter）、Edge WebView2 Runtime。以下两种方式任选一种，在仓库根目录创建 Windows 桌宠专用 `.venv`；不会安装或修改 Codex Pet 的校验环境。
 
 ### 方式一：Python venv + pip
 
@@ -74,7 +80,7 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 uv --version
 ```
 
-`.python-version` 指定 Python 3.13，uv 会在缺少该版本时自动下载：
+`.python-version` 指定 Python 3.13，uv 会在缺少该版本时自动下载。以下命令仍只创建和维护 Windows 桌宠的根 `.venv`：
 
 ```powershell
 uv venv
@@ -118,6 +124,20 @@ npm run test:e2e
 ```
 
 E2E 使用隔离临时目录和模拟模型，不读取真实密钥，不调用付费服务；实机检查会临时打开桌宠、气泡和设置窗口，并验证关闭及重新打开。真实模型连接需要在设置页填写有效的服务信息后测试。
+
+## Codex Pet：独立使用
+
+Codex Pet 不需要启动 Windows 桌宠，也不依赖 `vn_pet/`、WebView2 或根目录的设置服务。直接复制 `codex-pet/packages/vn-a3-v3/` 可安装成品；打开包内 `preview.html` 可离线预览。
+
+如需验证成品文件，可使用 Codex Pet 自己的可选环境，不影响 Windows 桌宠：
+
+```powershell
+py -3.13 -m venv codex-pet/.venv
+.\codex-pet\.venv\Scripts\python.exe -m pip install -r codex-pet/requirements-dev.txt
+.\codex-pet\.venv\Scripts\python.exe codex-pet/tools/verify_package.py
+```
+
+验证工具只检查 Codex Pet 的图集、配置、批准哈希和包内资源引用；修改 Codex Pet 不需要运行 `pytest tests`、前端构建或 `tests.native_smoke`。
 
 ## Windows 桌宠：模块
 
